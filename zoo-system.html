@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Система зоопарка</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      max-width: 960px;
+      margin: 36px auto;
+      padding: 0 20px;
+      color: #20242c;
+      background: #f3f6f3;
+      font: 16px/1.5 Arial, sans-serif;
+    }
+    h1, h2 { margin-top: 0; }
+    section {
+      margin: 18px 0;
+      padding: 20px;
+      background: #fff;
+      border: 1px solid #d9e2da;
+      border-radius: 12px;
+    }
+    form, .controls { display: flex; flex-wrap: wrap; gap: 10px; }
+    input, select, button {
+      min-height: 42px;
+      padding: 9px 12px;
+      border: 1px solid #c7d1c8;
+      border-radius: 7px;
+      font: inherit;
+    }
+    input, select { flex: 1 1 170px; }
+    button {
+      cursor: pointer;
+      color: #fff;
+      background: #28734b;
+      border-color: #28734b;
+    }
+    button.secondary { color: #263247; background: #fff; border-color: #c7d1c8; }
+    .animal-list { display: grid; gap: 10px; padding: 0; list-style: none; }
+    .animal {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px;
+      border: 1px solid #e1e8e1;
+      border-radius: 8px;
+    }
+    .animal-name { font-weight: 700; }
+    .muted { color: #647064; font-size: 14px; }
+    #message { min-height: 24px; margin: 12px 0 0; }
+    #message.error { color: #b42318; }
+    #message.success { color: #167343; }
+    .empty { color: #687386; }
+    @media (max-width: 580px) {
+      body { margin-top: 20px; }
+      .animal { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Система управления зоопарком</h1>
+
+  <section>
+    <h2>Добавить животное в вольер</h2>
+    <form id="add-form">
+      <input id="name-input" placeholder="Имя животного" required>
+      <select id="type-input" aria-label="Вид животного">
+        <option value="lion">Млекопитающее — лев</option>
+        <option value="parrot">Птица — попугай</option>
+        <option value="turtle">Рептилия — черепаха</option>
+      </select>
+      <button type="submit">Добавить</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Покормить животное</h2>
+    <div class="controls">
+      <select id="animal-select" aria-label="Выберите животное"></select>
+      <select id="food-select" aria-label="Выберите корм">
+        <option value="meat">Мясо</option>
+        <option value="seeds">Зёрна</option>
+        <option value="plants">Растения</option>
+      </select>
+      <button id="feed-button" type="button">Покормить</button>
+    </div>
+    <p id="message" role="status" aria-live="polite"></p>
+  </section>
+
+  <section>
+    <h2>Животные в вольере</h2>
+    <ul id="animal-list" class="animal-list"></ul>
+  </section>
+
+  <section>
+    <h2>Статистика</h2>
+    <div id="stats"></div>
+  </section>
+
+  <script>
+    class FeedingError extends Error {
+      constructor(message) {
+        super(message);
+        this.name = "FeedingError";
+      }
+    }
+
+    class Animal {
+      static createdCount = 0;
+      #name;
+      #hunger;
+
+      constructor(name, foodType) {
+        if (typeof name !== "string" || !name.trim()) {
+          throw new Error("Укажите имя животного");
+        }
+
+        this.#name = name.trim();
+        this.foodType = foodType;
+        this.#hunger = 0;
+        Animal.createdCount++;
+      }
+
+      get name() {
+        return this.#name;
+      }
+
+      get hunger() {
+        return this.#hunger;
+      }
+
+      getSound() {
+        throw new Error("У каждого вида должен быть свой звук");
+      }
+
+      eat(foodType) {
+        if (foodType !== this.foodType) {
+          throw new FeedingError(`${this.name} не ест этот корм`);
+        }
+        if (this.#hunger === 0) {
+          throw new FeedingError(`${this.name} уже сыт`);
+        }
+
+        this.#hunger = 0;
+        return `${this.name} поел(а). ${this.getSound()}`;
+      }
+
+      makeHungry() {
+        this.#hunger = 1;
+      }
+
+      static getCreatedCount() {
+        return Animal.createdCount;
+      }
+    }
+
+    class Mammal extends Animal {
+      constructor(name, foodType = "meat") {
+        super(name, foodType);
+        this.group = "Млекопитающее";
+      }
+    }
+
+    class Bird extends Animal {
+      constructor(name, foodType = "seeds") {
+        super(name, foodType);
+        this.group = "Птица";
+      }
+    }
+
+    class Reptile extends Animal {
+      constructor(name, foodType = "plants") {
+        super(name, foodType);
+        this.group = "Рептилия";
+      }
+    }
+
+    class Lion extends Mammal {
+      getSound() {
+        return "Р-р-р!";
+      }
+    }
+
+    class Parrot extends Bird {
+      getSound() {
+        return "Чирик!";
+      }
+    }
+
+    class Turtle extends Reptile {
+      getSound() {
+        return "Ш-ш-ш!";
+      }
+    }
+
+    class Enclosure {
+      #animals = [];
+
+      addAnimal(animal) {
+        if (!(animal instanceof Animal)) {
+          throw new Error("В вольер можно добавить только животное");
+        }
+        this.#animals.push(animal);
+      }
+
+      getAnimals() {
+        return [...this.#animals];
+      }
+
+      findAnimal(name) {
+        return this.#animals.find(
+          (animal) => animal.name === name
+        ) || null;
+      }
+
+      getAnimalCount() {
+        return this.#animals.length;
+      }
+    }
+
+    const enclosure = new Enclosure();
+    enclosure.addAnimal(new Lion("Симба"));
+    enclosure.addAnimal(new Parrot("Кеша"));
+    enclosure.addAnimal(new Turtle("Тортилла"));
+    enclosure.getAnimals().forEach((animal) => animal.makeHungry());
+
+    const typeConstructors = {
+      lion: Lion,
+      parrot: Parrot,
+      turtle: Turtle,
+    };
+    const foodNames = {
+      meat: "мясо",
+      seeds: "зёрна",
+      plants: "растения",
+    };
+    const listElement = document.querySelector("#animal-list");
+    const animalSelect = document.querySelector("#animal-select");
+    const messageElement = document.querySelector("#message");
+
+    function render() {
+      const animals = enclosure.getAnimals();
+      listElement.replaceChildren();
+      animalSelect.replaceChildren();
+
+      if (animals.length === 0) {
+        const emptyMessage = document.createElement("li");
+        emptyMessage.className = "empty";
+        emptyMessage.textContent = "В вольере пока нет животных.";
+        listElement.append(emptyMessage);
+      }
+
+      animals.forEach((animal) => {
+        const item = document.createElement("li");
+        item.className = "animal";
+
+        const info = document.createElement("div");
+        const name = document.createElement("div");
+        name.className = "animal-name";
+        name.textContent = `${animal.name} — ${animal.group}`;
+
+        const details = document.createElement("div");
+        details.className = "muted";
+        details.textContent = `Пища: ${foodNames[animal.foodType]}. ${animal.hunger ? "Голоден(на)" : "Сыт(а)"}. Звук: ${animal.getSound()}`;
+
+        info.append(name, details);
+        item.append(info);
+        listElement.append(item);
+
+        const option = document.createElement("option");
+        option.value = animal.name;
+        option.textContent = animal.name;
+        animalSelect.append(option);
+      });
+
+      document.querySelector("#stats").textContent =
+        `Животных в вольере: ${enclosure.getAnimalCount()}\n` +
+        `Всего создано животных: ${Animal.getCreatedCount()}`;
+    }
+
+    function showMessage(text, isError = false) {
+      messageElement.textContent = text;
+      messageElement.className = isError ? "error" : "success";
+    }
+
+    document.querySelector("#add-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const nameInput = document.querySelector("#name-input");
+      const AnimalType = typeConstructors[document.querySelector("#type-input").value];
+
+      try {
+        if (enclosure.findAnimal(nameInput.value.trim())) {
+          throw new Error("Животное с таким именем уже есть в вольере");
+        }
+
+        const animal = new AnimalType(nameInput.value);
+        animal.makeHungry();
+        enclosure.addAnimal(animal);
+        nameInput.value = "";
+        showMessage(`${animal.name} добавлен(а) в вольер.`);
+        render();
+      } catch (error) {
+        showMessage(error.message, true);
+      }
+    });
+
+    document.querySelector("#feed-button").addEventListener("click", () => {
+      const animal = enclosure.findAnimal(animalSelect.value);
+      if (!animal) {
+        showMessage("Сначала добавьте животное в вольер.", true);
+        return;
+      }
+
+      try {
+        const result = animal.eat(document.querySelector("#food-select").value);
+        showMessage(result);
+        render();
+      } catch (error) {
+        showMessage(error.message, true);
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
