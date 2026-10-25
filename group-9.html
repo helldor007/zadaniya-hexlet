@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Библиотека</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #20242c;
+      background: #f4f6fa;
+      font: 16px/1.5 Arial, sans-serif;
+    }
+    h1, h2 { margin-top: 0; }
+    section {
+      margin: 20px 0;
+      padding: 20px;
+      background: #fff;
+      border: 1px solid #dce1e9;
+      border-radius: 12px;
+    }
+    form, .search-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    input, button {
+      min-height: 42px;
+      padding: 9px 12px;
+      border: 1px solid #c8cfda;
+      border-radius: 7px;
+      font: inherit;
+    }
+    input { flex: 1 1 180px; }
+    button { cursor: pointer; color: #fff; background: #315fce; border-color: #315fce; }
+    button.secondary { color: #263247; background: #fff; border-color: #c8cfda; }
+    button:disabled { cursor: default; opacity: .55; }
+    .book-list { display: grid; gap: 10px; padding: 0; list-style: none; }
+    .book {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid #e0e4eb;
+      border-radius: 8px;
+    }
+    .book-info { min-width: 0; }
+    .book-title { font-weight: 700; }
+    .status { color: #526078; font-size: 14px; }
+    .empty { color: #687386; }
+    #stats { white-space: pre-line; }
+    @media (max-width: 560px) {
+      body { margin-top: 22px; }
+      .book { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Моя библиотека</h1>
+
+  <section>
+    <h2>Добавить книгу</h2>
+    <form id="add-book-form">
+      <input id="title-input" name="title" placeholder="Название книги" required>
+      <input id="author-input" name="author" placeholder="Автор" required>
+      <button type="submit">Добавить</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Поиск по названию</h2>
+    <div class="search-row">
+      <input id="search-input" placeholder="Введите название книги">
+      <button id="search-button" type="button">Найти</button>
+      <button id="show-all-button" class="secondary" type="button">Показать все</button>
+    </div>
+  </section>
+
+  <section>
+    <h2 id="list-heading">Все книги</h2>
+    <ul id="book-list" class="book-list"></ul>
+  </section>
+
+  <section>
+    <h2>Статистика по авторам</h2>
+    <div id="stats"></div>
+  </section>
+
+  <script>
+    class Book {
+      constructor(title, author, isBorrowed = false) {
+        if (typeof title !== "string" || !title.trim()) {
+          throw new Error("Укажите название книги");
+        }
+        if (typeof author !== "string" || !author.trim()) {
+          throw new Error("Укажите автора книги");
+        }
+
+        this.title = title.trim();
+        this.author = author.trim();
+        this.isBorrowed = Boolean(isBorrowed);
+      }
+
+      toggleBorrowStatus() {
+        this.isBorrowed = !this.isBorrowed;
+        return this.isBorrowed;
+      }
+    }
+
+    class Library {
+      constructor(books = []) {
+        this.books = books;
+      }
+
+      addBook(book) {
+        if (!(book instanceof Book)) {
+          throw new Error("В библиотеку можно добавить только экземпляр Book");
+        }
+        this.books.push(book);
+        return book;
+      }
+
+      removeBook(title) {
+        const index = this.books.findIndex(
+          (book) => book.title.toLowerCase() === title.trim().toLowerCase()
+        );
+        if (index === -1) return false;
+        this.books.splice(index, 1);
+        return true;
+      }
+
+      findBookByTitle(title) {
+        const normalizedTitle = title.trim().toLowerCase();
+        return this.books.find(
+          (book) => book.title.toLowerCase() === normalizedTitle
+        ) || null;
+      }
+
+      getAvailableBooks() {
+        return this.books.filter((book) => !book.isBorrowed);
+      }
+
+      getStatsByAuthor() {
+        return this.books.reduce((stats, book) => {
+          stats[book.author] = (stats[book.author] || 0) + 1;
+          return stats;
+        }, {});
+      }
+    }
+
+    const library = new Library([
+      new Book("Мастер и Маргарита", "Михаил Булгаков"),
+      new Book("Собачье сердце", "Михаил Булгаков", true),
+      new Book("Преступление и наказание", "Фёдор Достоевский"),
+      new Book("Идиот", "Фёдор Достоевский"),
+      new Book("Евгений Онегин", "Александр Пушкин"),
+    ]);
+
+    const bookList = document.querySelector("#book-list");
+    const statsElement = document.querySelector("#stats");
+    const heading = document.querySelector("#list-heading");
+
+    function renderBooks(books = library.books, title = "Все книги") {
+      heading.textContent = title;
+      bookList.replaceChildren();
+
+      if (books.length === 0) {
+        const message = document.createElement("li");
+        message.className = "empty";
+        message.textContent = "Книги не найдены.";
+        bookList.append(message);
+        return;
+      }
+
+      books.forEach((book) => {
+        const item = document.createElement("li");
+        item.className = "book";
+
+        const info = document.createElement("div");
+        info.className = "book-info";
+
+        const bookTitle = document.createElement("div");
+        bookTitle.className = "book-title";
+        bookTitle.textContent = book.title;
+
+        const author = document.createElement("div");
+        author.textContent = book.author;
+
+        const status = document.createElement("div");
+        status.className = "status";
+        status.textContent = book.isBorrowed ? "На руках" : "Доступна";
+
+        info.append(bookTitle, author, status);
+
+        const actions = document.createElement("div");
+        actions.className = "search-row";
+
+        const borrowButton = document.createElement("button");
+        borrowButton.type = "button";
+        borrowButton.className = "secondary";
+        borrowButton.textContent = book.isBorrowed ? "Вернуть" : "Взять";
+        borrowButton.addEventListener("click", () => {
+          book.toggleBorrowStatus();
+          renderBooks();
+          renderStats();
+        });
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.textContent = "Удалить";
+        removeButton.addEventListener("click", () => {
+          library.removeBook(book.title);
+          renderBooks();
+          renderStats();
+        });
+
+        actions.append(borrowButton, removeButton);
+        item.append(info, actions);
+        bookList.append(item);
+      });
+    }
+
+    function renderStats() {
+      const stats = library.getStatsByAuthor();
+      const authors = Object.entries(stats);
+
+      statsElement.textContent = authors.length
+        ? authors.map(([author, count]) => `${author}: ${count}`).join("\n")
+        : "В библиотеке пока нет книг.";
+    }
+
+    document.querySelector("#add-book-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const titleInput = document.querySelector("#title-input");
+      const authorInput = document.querySelector("#author-input");
+
+      try {
+        library.addBook(new Book(titleInput.value, authorInput.value));
+        titleInput.value = "";
+        authorInput.value = "";
+        renderBooks();
+        renderStats();
+      } catch (error) {
+        alert(error.message);
+      }
+    });
+
+    function searchBook() {
+      const title = document.querySelector("#search-input").value.trim();
+      if (!title) {
+        renderBooks();
+        return;
+      }
+
+      const book = library.findBookByTitle(title);
+      renderBooks(book ? [book] : [], `Результат поиска: ${title}`);
+    }
+
+    document.querySelector("#search-button").addEventListener("click", searchBook);
+    document.querySelector("#search-input").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") searchBook();
+    });
+    document.querySelector("#show-all-button").addEventListener("click", () => {
+      document.querySelector("#search-input").value = "";
+      renderBooks();
+    });
+
+    renderBooks();
+    renderStats();
+  </script>
+</body>
+</html>
